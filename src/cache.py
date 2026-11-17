@@ -18,17 +18,17 @@ class MovieCache:
         key = self.make_key(limit)
         response = self.client.get(key)
         if response is None:
-            logger.debug("Cache MISS: %s", key)
+            logger.debug(f"Cache MISS: {key}")
             return None
 
-        logger.debug("Cache HIT: %s", key)
+        logger.debug(f"Cache HIT: {key}")
         return json.loads(response)
 
     def set(self, limit, response):
         """Cache the response dictionary for 90 seconds."""
         key = self.make_key(limit)
         self.client.set(key, json.dumps(response), ex=90)
-        logger.debug("Cached movie response: %s", key)
+        logger.debug(f"Cached movie response: {key}")
 
     def invalidate(self):
         """Remove all cached movie retrievals."""

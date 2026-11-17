@@ -40,33 +40,33 @@ async def upload_movies(file: UploadFile = File(...)):
     filename = file.filename or ""
     if Path(filename).suffix.lower() != ".csv":
         extension = Path(filename).suffix.lower()
-        logger.warning("Unsupported file format: %s", extension)
+        logger.warning(f"Unsupported file format: {extension}")
         raise HTTPException(status_code=400, detail="Only CSV files are supported.")
 
     contents = await file.read()
     try:
         df = pd.read_csv(io.BytesIO(contents))
     except (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError) as error:
-        logger.warning("Failed to read CSV file %s: %s", filename, error)
+        logger.warning(f"Failed to read CSV file {filename}: {error}")
         raise HTTPException(
             status_code=400,
             detail=f"Failed to read CSV file: {error}",
         )
 
     if len(df.columns) != len(MOVIE_COLUMNS) or set(df.columns) != set(MOVIE_COLUMNS):
-        logger.warning("Invalid movie columns in upload: %s", list(df.columns))
+        logger.warning(f"Invalid movie columns in upload: {list(df.columns)}")
         raise HTTPException(
             status_code=400,
             detail=f"CSV must contain exactly these columns: {', '.join(MOVIE_COLUMNS)}",
         )
     if df.empty:
-        logger.warning("Movie upload contains no data rows: %s", filename)
+        logger.warning(f"Movie upload contains no data rows: {filename}")
         raise HTTPException(status_code=400, detail="CSV must contain at least one data row.")
 
     df = df[MOVIE_COLUMNS]
     storage.save(df)
     cache.invalidate()
-    logger.info("Uploaded movies: filename=%s, rows=%s", filename, len(df))
+    logger.info(f"Uploaded movies: filename={filename}, rows={len(df)}")
 
     return MovieUploadInfo(
         filename=filename,
@@ -81,7 +81,7 @@ def get_movies(limit: int = Query(default=100, ge=1)):
     """Return movie rows, using the cache when available."""
     cached_response = cache.get(limit)
     if cached_response is not None:
-        logger.info("Retrieved movies from cache: returned_rows=%s", len(cached_response["data"]))
+        logger.info(f"Retrieved movies from cache: returned_rows={len(cached_response['data'])}")
         return cached_response
 
     response = {
@@ -89,7 +89,7 @@ def get_movies(limit: int = Query(default=100, ge=1)):
         "total_rows": storage.count_movies(),
     }
     cache.set(limit, response)
-    logger.info("Retrieved movies: returned_rows=%s", len(response["data"]))
+    logger.info(f"Retrieved movies: returned_rows={len(response['data'])}")
     return response
 
 
@@ -103,14 +103,12 @@ def query_movies(
     try:
         results = storage.query_movies(columns, min_rating, limit)
     except ValueError as error:
-        logger.warning("Invalid movie search: %s", error)
+        logger.warning(f"Invalid movie search: {error}")
         raise HTTPException(status_code=400, detail=str(error))
 
     logger.info(
-        "Queried movies: columns=%s, min_rating=%s, returned_rows=%s",
-        columns,
-        min_rating,
-        len(results),
+        f"Queried movies: columns={columns}, min_rating={min_rating}, "
+        f"returned_rows={len(results)}"
     )
     return results
 
@@ -130,7 +128,7 @@ def process_movies(config: ProcessConfig):
     ]
     if missing_numeric_columns:
         missing = ", ".join(missing_numeric_columns)
-        logger.warning("Movie collection is missing configured numeric columns: %s", missing)
+        logger.warning(f"Movie collection is missing configured numeric columns: {missing}")
         raise HTTPException(
             status_code=400,
             detail=f"Missing numeric columns: {missing}",
@@ -147,16 +145,15 @@ def process_movies(config: ProcessConfig):
         processed_df = process_data(validated_df, config_data)
         cleaning_report = create_cleaning_report(validated_copy, processed_df)
     except ValueError as error:
-        logger.warning("Failed to process movies: %s", error)
+        logger.warning(f"Failed to process movies: {error}")
         raise HTTPException(status_code=400, detail=str(error))
 
     storage.save(processed_df)
     cache.invalidate()
     logger.info(
-        "Processed movies: validation_removed=%s, rows_before=%s, rows_after=%s",
-        validation_rows_removed,
-        cleaning_report["rows_before"],
-        cleaning_report["rows_after"],
+        f"Processed movies: validation_removed={validation_rows_removed}, "
+        f"rows_before={cleaning_report['rows_before']}, "
+        f"rows_after={cleaning_report['rows_after']}"
     )
     return {
         "validation_rows_removed": validation_rows_removed,
